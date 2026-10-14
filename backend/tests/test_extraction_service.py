@@ -1,9 +1,10 @@
 from app.services.extraction_service import (
     extract_voucher,
+    extract_apv,
     clean_text,
     extract_vouchers_from_file,
     is_opv_petty_cash_page,
-    is_apv_or_other_sheet,
+    is_apv_page,
 )
 
 
@@ -55,10 +56,26 @@ Req Num
 13-10-2026
 Date
 E25069
+72
 Employee
 YOUSSEF ABOU KHURJ
-PETTY CASH VOUCHER
-Amount :
+51
+Division
+ALPHA DATA
+RECRUITMENT
+No. of Docs Attached
+1
+S. No.
+Payroll Related
+payments
+Classification
+Sep Salary 21 - 30 Jamal
+Claim Details
+      10,333.33
+Amount
+ALPHA DATA  (L.L.C.)
+      10,333.33
+Total :
 Notes :
 SALARY PAYABLE ACCOUNT
 """
@@ -120,9 +137,19 @@ def test_clean_text_strips_blank_lines():
     assert "b" in cleaned
 
 
-def test_skip_apv_keep_opv():
-    assert is_apv_or_other_sheet(APV_PAGE)
+def test_extract_apv_fields():
+    assert is_apv_page(APV_PAGE)
     assert not is_opv_petty_cash_page(APV_PAGE)
+    data = extract_apv(APV_PAGE)
+    assert data["Voucher No"] == "APV2600892"
+    assert data["Employee ID"] == "E2506972"
+    assert "YOUSSEF" in data["Employee Name"]
+    assert data["Department"].startswith("51")
+    assert "Payroll" in data["Classification"]
+    assert data["Total AED"] == "10333.33"
+
+
+def test_opv_page():
     assert is_opv_petty_cash_page(OPV_PAGE)
     data = extract_voucher(OPV_PAGE)
     assert data["Voucher No"] == "OPV2601185"
@@ -130,15 +157,19 @@ def test_skip_apv_keep_opv():
     assert "2550.42" in (data["Total AED"] or data["Amount"])
 
 
-def test_w39_pdf_extracts_only_opv():
+def test_w39_pdf_extracts_apv_and_opv():
     from pathlib import Path
 
     pdf = Path(__file__).resolve().parents[2] / "W39 VOUCHERS.pdf"
     if not pdf.exists():
         pdf = Path(__file__).resolve().parents[3] / "W39 VOUCHERS.pdf"
     if not pdf.exists():
-        return  # skip if sample not present
+        return
     rows = extract_vouchers_from_file(str(pdf))
     nos = [r["Voucher No"] for r in rows]
-    assert nos == ["OPV2601185", "OPV2601186", "OPV2601198", "OPV2601204"]
-    assert all(not n.startswith("APV") for n in nos)
+    assert "APV2600892" in nos
+    assert "OPV2601185" in nos
+    assert len(nos) == 11
+    apv = next(r for r in rows if r["Voucher No"] == "APV2600892")
+    assert apv["Employee ID"] == "E2506972"
+    assert "Payroll" in apv["Classification"]
