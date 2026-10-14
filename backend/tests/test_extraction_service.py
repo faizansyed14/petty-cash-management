@@ -1,4 +1,10 @@
-from app.services.extraction_service import extract_voucher, clean_text
+from app.services.extraction_service import (
+    extract_voucher,
+    clean_text,
+    extract_vouchers_from_file,
+    is_opv_petty_cash_page,
+    is_apv_or_other_sheet,
+)
 
 
 SAMPLE = """
@@ -16,6 +22,45 @@ Total   Aed: Eighty one                                   81
 
 Remarks:
 Claimed By ______   Division Manager ______   Approved By ______
+"""
+
+OPV_PAGE = """
+PETTY CASH VOUCHER
+Voucher No : OPV2601185       Voucher Date : Oct 5 2026 4:49PM
+Employee : E0702713       ZAKARIA IBBINI
+Department : 51 Recruitment
+Sl #
+Classification
+Claim Information Details
+Amount
+1
+OTHER
+AIRSOFT TOY PISTOL AND RIFLE
+2550.42
+Total
+Aed :Two thousand five hundred fifty
+2550.42
+Remarks
+:
+COST TO PROJECT PGC
+_____________________
+Claimed By
+Division Manager
+Approved By
+"""
+
+APV_PAGE = """
+APV2600892
+Req Num
+13-10-2026
+Date
+E25069
+Employee
+YOUSSEF ABOU KHURJ
+PETTY CASH VOUCHER
+Amount :
+Notes :
+SALARY PAYABLE ACCOUNT
 """
 
 
@@ -73,3 +118,27 @@ def test_clean_text_strips_blank_lines():
     cleaned = clean_text("a\n\n  b  \n\xa0c")
     assert "a" in cleaned
     assert "b" in cleaned
+
+
+def test_skip_apv_keep_opv():
+    assert is_apv_or_other_sheet(APV_PAGE)
+    assert not is_opv_petty_cash_page(APV_PAGE)
+    assert is_opv_petty_cash_page(OPV_PAGE)
+    data = extract_voucher(OPV_PAGE)
+    assert data["Voucher No"] == "OPV2601185"
+    assert data["Employee ID"] == "E0702713"
+    assert "2550.42" in (data["Total AED"] or data["Amount"])
+
+
+def test_w39_pdf_extracts_only_opv():
+    from pathlib import Path
+
+    pdf = Path(__file__).resolve().parents[2] / "W39 VOUCHERS.pdf"
+    if not pdf.exists():
+        pdf = Path(__file__).resolve().parents[3] / "W39 VOUCHERS.pdf"
+    if not pdf.exists():
+        return  # skip if sample not present
+    rows = extract_vouchers_from_file(str(pdf))
+    nos = [r["Voucher No"] for r in rows]
+    assert nos == ["OPV2601185", "OPV2601186", "OPV2601198", "OPV2601204"]
+    assert all(not n.startswith("APV") for n in nos)

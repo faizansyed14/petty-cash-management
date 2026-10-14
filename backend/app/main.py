@@ -69,9 +69,12 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router)
 
-    @app.get("/health")
+    @app.get("/health", tags=["health"])
+    @app.get("/api/health", tags=["health"])
+    @app.get("/api/keepalive", tags=["health"])
     def health():
-        return {"status": "ok"}
+        """Cron keep-alive — no auth, no DB. Hit every ~10 min on Render free."""
+        return {"status": "ok", "alive": True}
 
     return app
 

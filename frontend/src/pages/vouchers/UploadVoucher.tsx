@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   ExtractedVoucherForm,
@@ -70,39 +70,74 @@ export function UploadVoucher() {
     return c;
   }, [queue]);
 
+  const clearAll = () => {
+    setQueue((prev) => {
+      const urls = new Set(prev.map((q) => q.previewUrl));
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+    setActiveId(null);
+    toast.message("Cleared upload queue");
+  };
+
   const enqueue = async (files: File[]) => {
-    const items: BatchQueueItem[] = files.map((file) => ({
+    const placeholders: BatchQueueItem[] = files.map((file) => ({
       id: crypto.randomUUID(),
       file,
       previewUrl: URL.createObjectURL(file),
       status: "queued",
     }));
-    setQueue((prev) => [...prev, ...items]);
-    setActiveId((prev) => prev ?? items[0]?.id ?? null);
-    toast.message(`Queued ${items.length} voucher${items.length === 1 ? "" : "s"} for extraction`);
+    setQueue((prev) => [...prev, ...placeholders]);
+    setActiveId((prev) => prev ?? placeholders[0]?.id ?? null);
+    toast.message(`Queued ${files.length} file${files.length === 1 ? "" : "s"}`);
 
-    for (const item of items) {
-      setQueue((prev) => prev.map((q) => (q.id === item.id ? { ...q, status: "extracting" } : q)));
+    for (const placeholder of placeholders) {
+      setQueue((prev) =>
+        prev.map((q) => (q.id === placeholder.id ? { ...q, status: "extracting" } : q)),
+      );
       try {
-        const draft = await extract.mutateAsync(item.file);
-        setQueue((prev) =>
-          prev.map((q) =>
-            q.id === item.id
-              ? {
-                  ...q,
-                  status: "ready",
-                  draft,
-                }
-              : q,
-          ),
+        const drafts = await extract.mutateAsync(placeholder.file);
+        if (!drafts.length) {
+          setQueue((prev) =>
+            prev.map((q) =>
+              q.id === placeholder.id
+                ? { ...q, status: "error", error: "No OPV vouchers found in file" }
+                : q,
+            ),
+          );
+          continue;
+        }
+
+        const [first, ...rest] = drafts;
+        const extra: BatchQueueItem[] = rest.map((draft) => ({
+          id: crypto.randomUUID(),
+          file: placeholder.file,
+          previewUrl: placeholder.previewUrl,
+          status: "ready" as const,
+          draft,
+        }));
+
+        setQueue((prev) => {
+          const updated = prev.map((q) =>
+            q.id === placeholder.id ? { ...q, status: "ready" as const, draft: first } : q,
+          );
+          const idx = updated.findIndex((q) => q.id === placeholder.id);
+          if (idx < 0 || !extra.length) return [...updated, ...extra];
+          return [...updated.slice(0, idx + 1), ...extra, ...updated.slice(idx + 1)];
+        });
+
+        toast.success(
+          `${placeholder.file.name}: ${drafts.length} OPV voucher${drafts.length === 1 ? "" : "s"}`,
         );
       } catch (err) {
         setQueue((prev) =>
           prev.map((q) =>
-            q.id === item.id ? { ...q, status: "error", error: getErrorMessage(err) } : q,
+            q.id === placeholder.id
+              ? { ...q, status: "error", error: getErrorMessage(err) }
+              : q,
           ),
         );
-        toast.error(`Extract failed: ${item.file.name}`);
+        toast.error(`Extract failed: ${placeholder.file.name}`);
       }
     }
   };
@@ -195,22 +230,33 @@ export function UploadVoucher() {
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-base">Batch queue · {counts.total} files</CardTitle>
+              <CardTitle className="text-base">Batch queue · {counts.total} vouchers</CardTitle>
               <p className="text-xs text-muted-foreground">
                 Ready {counts.ready} · Saved {counts.saved} · Skipped (duplicate) {counts.skipped} ·
                 Working {counts.extracting} · Errors {counts.error}
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={saveAll}
-              disabled={savingAll || counts.ready === 0}
-              className="bg-orange-500 text-white hover:bg-orange-600"
-            >
-              {savingAll
-                ? "Saving all…"
-                : `Save all vouchers${counts.ready ? ` (${counts.ready})` : ""}`}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearAll}
+                disabled={savingAll || extract.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                Clear
+              </Button>
+              <Button
+                type="button"
+                onClick={saveAll}
+                disabled={savingAll || counts.ready === 0}
+                className="bg-orange-500 text-white hover:bg-orange-600"
+              >
+                {savingAll
+                  ? "Saving all…"
+                  : `Save all vouchers${counts.ready ? ` (${counts.ready})` : ""}`}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">

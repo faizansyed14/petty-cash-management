@@ -120,5 +120,12 @@ class VoucherListResponse(BaseModel):
     total: int
 
 
+class VoucherExtractResponse(BaseModel):
+    """One PDF can contain many OPV petty-cash vouchers."""
+
+    items: list[VoucherDraft]
+    count: int
+
+
 class BanksResponse(BaseModel):
     banks: list[str]

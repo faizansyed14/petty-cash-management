@@ -33,13 +33,18 @@ export function useVouchers(filters: VoucherFilters = {}) {
   });
 }
 
+export interface VoucherExtractResponse {
+  items: VoucherDraft[];
+  count: number;
+}
+
 export function useExtractVoucher() {
   return useMutation({
     mutationFn: async (file: File) => {
       const form = new FormData();
       form.append("file", file);
-      const { data } = await api.post<VoucherDraft>("/api/vouchers/extract", form);
-      return data;
+      const { data } = await api.post<VoucherExtractResponse>("/api/vouchers/extract", form);
+      return data.items?.length ? data.items : [];
     },
   });
 }

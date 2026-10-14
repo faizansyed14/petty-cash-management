@@ -8,7 +8,7 @@ from app.db.models.voucher import VoucherStatus
 from app.schemas.voucher import (
     BanksResponse,
     VoucherCreate,
-    VoucherDraft,
+    VoucherExtractResponse,
     VoucherListResponse,
     VoucherOut,
     VoucherUpdate,
@@ -20,13 +20,20 @@ from app.utils.banks import UAE_BANKS
 router = APIRouter(prefix="/vouchers", tags=["vouchers"])
 
 
-@router.post("/extract", response_model=VoucherDraft, summary="Upload and extract voucher (no persist)")
+@router.post(
+    "/extract",
+    response_model=VoucherExtractResponse,
+    summary="Upload and extract OPV petty-cash voucher(s) from one PDF (no persist)",
+)
 async def extract_voucher(db: DbSession, user: CurrentUser, file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename required")
     content = await file.read()
     try:
-        return voucher_service.extract_from_bytes(file.filename, content, db=db)
+        items = voucher_service.extract_from_bytes(file.filename, content, db=db)
+        return VoucherExtractResponse(items=items, count=len(items))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Extraction failed: {exc}") from exc
 

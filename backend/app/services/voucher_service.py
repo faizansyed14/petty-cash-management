@@ -11,7 +11,7 @@ from app.db.models.employee import Employee
 from app.db.models.voucher import Voucher, VoucherStatus, SettlementType
 from app.schemas.voucher import VoucherCreate, VoucherDraft, VoucherUpdate
 from app.services import physical_cash_service
-from app.services.extraction_service import extract_voucher_from_file
+from app.services.extraction_service import extract_vouchers_from_file
 
 
 def normalize_voucher_date(raw: str | None) -> str:
@@ -44,9 +44,7 @@ def map_extraction_to_draft(raw: dict, source_file_url: str = "") -> VoucherDraf
     )
 
 
-def extract_and_map(file_path: str, source_file_url: str = "", db: Session | None = None) -> VoucherDraft:
-    raw = extract_voucher_from_file(file_path)
-    draft = map_extraction_to_draft(raw, "")
+def _mark_existing(db: Session | None, draft: VoucherDraft) -> VoucherDraft:
     if db is not None and draft.voucher_no:
         existing = db.query(Voucher).filter(Voucher.voucher_no == draft.voucher_no).first()
         if existing:
@@ -55,15 +53,27 @@ def extract_and_map(file_path: str, source_file_url: str = "", db: Session | Non
     return draft
 
 
-def extract_from_bytes(filename: str, content: bytes, db: Session | None = None) -> VoucherDraft:
-    """Extract using a temp file only — nothing is stored under /uploads."""
+def extract_and_map_many(
+    file_path: str, source_file_url: str = "", db: Session | None = None
+) -> list[VoucherDraft]:
+    rows = extract_vouchers_from_file(file_path)
+    return [_mark_existing(db, map_extraction_to_draft(raw, "")) for raw in rows]
+
+
+def extract_and_map(file_path: str, source_file_url: str = "", db: Session | None = None) -> VoucherDraft:
+    drafts = extract_and_map_many(file_path, source_file_url, db=db)
+    return drafts[0]
+
+
+def extract_from_bytes(filename: str, content: bytes, db: Session | None = None) -> list[VoucherDraft]:
+    """Extract one or many OPV vouchers from a temp file — nothing stored under /uploads."""
     suffix = Path(filename).suffix or ".pdf"
     tmp_path: str | None = None
     try:
         with NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
-        return extract_and_map(tmp_path, "", db=db)
+        return extract_and_map_many(tmp_path, "", db=db)
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
