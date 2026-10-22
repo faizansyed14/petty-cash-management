@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -42,6 +42,20 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
   const update = useUpdateVoucher();
   const del = useDeleteVoucher();
   const [pendingDelete, setPendingDelete] = useState<Voucher | null>(null);
+  const [dateOrder, setDateOrder] = useState<"desc" | "asc">("desc");
+
+  const sorted = useMemo(() => {
+    const rows = [...vouchers];
+    rows.sort((a, b) => {
+      const da = a.settlement_date?.slice(0, 10) || "";
+      const db = b.settlement_date?.slice(0, 10) || "";
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return dateOrder === "desc" ? db.localeCompare(da) : da.localeCompare(db);
+    });
+    return rows;
+  }, [vouchers, dateOrder]);
 
   const save = async (id: string, payload: Parameters<typeof update.mutateAsync>[0]["payload"]) => {
     try {
@@ -86,14 +100,23 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
               <TableHead className="h-9 min-w-[180px] px-3 py-2 font-bold uppercase">Notes</TableHead>
               <TableHead className="h-9 min-w-[320px] px-3 py-2 font-bold uppercase">Deposited</TableHead>
               <TableHead className="h-9 px-3 py-2 font-bold uppercase">Cash Collection</TableHead>
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">Date</TableHead>
+              <TableHead className="h-9 px-3 py-2 font-bold uppercase">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 uppercase"
+                  onClick={() => setDateOrder((o) => (o === "desc" ? "asc" : "desc"))}
+                  title={dateOrder === "desc" ? "Latest first — click for oldest" : "Oldest first — click for latest"}
+                >
+                  Date {dateOrder === "desc" ? "↓" : "↑"}
+                </button>
+              </TableHead>
               <TableHead className="h-9 min-w-[120px] px-3 py-2 font-bold uppercase">File Number</TableHead>
               <TableHead className="h-9 px-3 py-2 font-bold uppercase">Status</TableHead>
               <TableHead className="h-9 px-3 py-2 text-right font-bold uppercase">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {vouchers.map((v, idx) => {
+            {sorted.map((v, idx) => {
               const settlementValue =
                 v.settlement_type === "DEPOSITED"
                   ? "DEPOSITED"

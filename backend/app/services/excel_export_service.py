@@ -58,7 +58,11 @@ def build_voucher_register_excel(
         skip=0,
         limit=5000,
     )
-    vouchers = sorted(vouchers, key=lambda v: (v.settlement_date or date.min, v.voucher_date))
+    vouchers = sorted(
+        vouchers,
+        key=lambda v: (v.settlement_date is None, v.settlement_date or date.min),
+        reverse=True,
+    )
 
     wb = Workbook()
     ws = wb.active

@@ -183,7 +183,12 @@ def list_vouchers(
             | (Employee.employee_code.ilike(like))
         )
     total = q.count()
-    items = q.order_by(Voucher.voucher_date.desc()).offset(skip).limit(limit).all()
+    items = (
+        q.order_by(Voucher.settlement_date.desc().nulls_last(), Voucher.voucher_date.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     return items, total
 
 

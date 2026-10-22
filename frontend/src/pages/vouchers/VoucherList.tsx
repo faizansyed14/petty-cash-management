@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { downloadVoucherExcel, useVouchers } from "@/hooks/useVouchers";
-import { parseDisplayDate } from "@/lib/utils";
 import { getErrorMessage } from "@/services/api";
 import type { VoucherStatus } from "@/types";
 
@@ -23,25 +22,15 @@ const statuses: Array<VoucherStatus | "ALL"> = ["ALL", "PENDING_PAYMENT", "PAID"
 export function VoucherList() {
   const [status, setStatus] = useState<VoucherStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
-  const [dateFromText, setDateFromText] = useState("");
-  const [dateToText, setDateToText] = useState("");
   const [exporting, setExporting] = useState(false);
 
-  const dateFrom = parseDisplayDate(dateFromText);
-  const dateTo = parseDisplayDate(dateToText);
   const filters = {
     status: status === "ALL" ? "" : status,
     search: search || undefined,
-    dateFrom: typeof dateFrom === "string" ? dateFrom : undefined,
-    dateTo: typeof dateTo === "string" ? dateTo : undefined,
   };
   const query = useVouchers(filters);
 
   const onExport = async () => {
-    if (dateFrom === undefined || dateTo === undefined) {
-      toast.error("Date filter must be dd/mm/yyyy");
-      return;
-    }
     setExporting(true);
     try {
       await downloadVoucherExcel(filters);
@@ -79,18 +68,6 @@ export function VoucherList() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base">Register</CardTitle>
           <div className="flex flex-wrap gap-2">
-            <Input
-              placeholder="From dd/mm/yyyy"
-              className="w-[150px]"
-              value={dateFromText}
-              onChange={(e) => setDateFromText(e.target.value)}
-            />
-            <Input
-              placeholder="To dd/mm/yyyy"
-              className="w-[150px]"
-              value={dateToText}
-              onChange={(e) => setDateToText(e.target.value)}
-            />
             <Input
               placeholder="Search…"
               className="w-[200px]"
