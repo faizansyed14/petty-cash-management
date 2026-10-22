@@ -8,7 +8,7 @@ from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
-from app.db.models.voucher import SettlementType
+from app.db.models.voucher import SettlementType, Voucher
 from app.services.voucher_service import list_vouchers
 
 
