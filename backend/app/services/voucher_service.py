@@ -184,7 +184,7 @@ def list_vouchers(
         )
     total = q.count()
     items = (
-        q.order_by(Voucher.settlement_date.desc().nulls_last(), Voucher.voucher_date.desc())
+        q.order_by(Voucher.settlement_date.asc().nulls_last(), Voucher.voucher_date.asc())
         .offset(skip)
         .limit(limit)
         .all()

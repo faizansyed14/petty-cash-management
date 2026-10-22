@@ -42,7 +42,7 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
   const update = useUpdateVoucher();
   const del = useDeleteVoucher();
   const [pendingDelete, setPendingDelete] = useState<Voucher | null>(null);
-  const [dateOrder, setDateOrder] = useState<"desc" | "asc">("desc");
+  const [dateOrder, setDateOrder] = useState<"desc" | "asc">("asc");
 
   const sorted = useMemo(() => {
     const rows = [...vouchers];
@@ -105,7 +105,7 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
                   type="button"
                   className="inline-flex items-center gap-1 uppercase"
                   onClick={() => setDateOrder((o) => (o === "desc" ? "asc" : "desc"))}
-                  title={dateOrder === "desc" ? "Latest first — click for oldest" : "Oldest first — click for latest"}
+                  title={dateOrder === "asc" ? "Oldest first — click for latest" : "Latest first — click for oldest"}
                 >
                   Date {dateOrder === "desc" ? "↓" : "↑"}
                 </button>
