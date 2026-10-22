@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
@@ -55,6 +56,8 @@ def list_vouchers(
     year: int | None = Query(None, ge=2000),
     status_filter: str | None = Query(None, alias="status"),
     search: str | None = None,
+    date_from: date | None = Query(None, description="Settlement date from (inclusive)"),
+    date_to: date | None = Query(None, description="Settlement date to (inclusive)"),
     skip: int = 0,
     limit: int = Query(500, le=1000),
 ):
@@ -78,6 +81,8 @@ def list_vouchers(
         status=single,
         statuses=statuses,
         search=search,
+        date_from=date_from,
+        date_to=date_to,
         skip=skip,
         limit=limit,
     )
@@ -90,8 +95,21 @@ def list_banks(user: CurrentUser):
 
 
 @router.get("/export/excel", summary="Export voucher register Excel (ALPHA DATA RECRUITMENT layout)")
-def export_excel(db: DbSession, user: CurrentUser):
-    content = build_voucher_register_excel(db)
+def export_excel(
+    db: DbSession,
+    user: CurrentUser,
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    search: str | None = None,
+):
+    content = build_voucher_register_excel(
+        db,
+        date_from=date_from,
+        date_to=date_to,
+        status=status_filter,
+        search=search,
+    )
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

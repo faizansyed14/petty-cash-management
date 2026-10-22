@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDeleteVoucher, useUpdateVoucher } from "@/hooks/useVouchers";
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, parseDisplayDate, toDisplayDate } from "@/lib/utils";
 import { getErrorMessage } from "@/services/api";
 import { UAE_BANKS, type SettlementType, type Voucher } from "@/types";
 
@@ -183,18 +183,27 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
                   </TableCell>
                   <TableCell className="px-3 py-1.5">
                     <Input
-                      type="date"
-                      className="h-8 w-[140px]"
-                      value={v.settlement_date ? v.settlement_date.slice(0, 10) : ""}
+                      className="h-8 w-[120px]"
+                      placeholder="dd/mm/yyyy"
                       disabled={!v.settlement_type}
-                      onChange={(e) => {
-                        const d = e.target.value;
+                      defaultValue={toDisplayDate(v.settlement_date)}
+                      key={`${v.id}-date-${v.settlement_date ?? ""}`}
+                      onBlur={(e) => {
                         if (!v.settlement_type) return;
-                        void save(v.id, {
-                          settlement_type: v.settlement_type,
-                          bank_name: v.bank_name,
-                          settlement_date: d || null,
-                        });
+                        const parsed = parseDisplayDate(e.target.value);
+                        if (parsed === undefined) {
+                          toast.error("Use date as dd/mm/yyyy");
+                          e.target.value = toDisplayDate(v.settlement_date);
+                          return;
+                        }
+                        const current = v.settlement_date ? v.settlement_date.slice(0, 10) : null;
+                        if (parsed !== current) {
+                          void save(v.id, {
+                            settlement_type: v.settlement_type,
+                            bank_name: v.bank_name,
+                            settlement_date: parsed,
+                          });
+                        }
                       }}
                     />
                   </TableCell>

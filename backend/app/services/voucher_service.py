@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -155,10 +155,16 @@ def list_vouchers(
     status: VoucherStatus | None = None,
     statuses: list[VoucherStatus] | None = None,
     search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> tuple[list[Voucher], int]:
     q = db.query(Voucher).options(joinedload(Voucher.employee))
+    if date_from:
+        q = q.filter(Voucher.settlement_date >= date_from)
+    if date_to:
+        q = q.filter(Voucher.settlement_date <= date_to)
     if month and year:
         start = datetime(year, month, 1)
         end = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)

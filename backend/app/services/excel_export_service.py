@@ -1,13 +1,15 @@
 """Excel export matching ALPHA DATA RECRUITMENT voucher register sheet."""
 
+from datetime import date
 from io import BytesIO
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
-from app.db.models.voucher import SettlementType, Voucher
+from app.db.models.voucher import SettlementType
+from app.services.voucher_service import list_vouchers
 
 
 HEADERS = [
@@ -27,13 +29,36 @@ def _note_text(v: Voucher) -> str:
     return v.details or ""
 
 
-def build_voucher_register_excel(db: Session) -> bytes:
-    vouchers = (
-        db.query(Voucher)
-        .options(joinedload(Voucher.employee))
-        .order_by(Voucher.voucher_date.asc(), Voucher.created_at.asc())
-        .all()
+def build_voucher_register_excel(
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+    search: str | None = None,
+) -> bytes:
+    from app.db.models.voucher import VoucherStatus
+
+    single = None
+    statuses = None
+    if status:
+        parts = [p.strip() for p in status.split(",") if p.strip()]
+        parsed = [VoucherStatus(p) for p in parts]
+        if len(parsed) == 1:
+            single = parsed[0]
+        else:
+            statuses = parsed
+
+    vouchers, _ = list_vouchers(
+        db,
+        status=single,
+        statuses=statuses,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        skip=0,
+        limit=5000,
     )
+    vouchers = sorted(vouchers, key=lambda v: (v.settlement_date or date.min, v.voucher_date))
 
     wb = Workbook()
     ws = wb.active
@@ -73,10 +98,6 @@ def build_voucher_register_excel(db: Session) -> bytes:
         elif v.settlement_type == SettlementType.CASH_COLLECTION:
             cash_collection = "Cash Collection"
 
-        settle_date = ""
-        if v.settlement_date:
-            settle_date = v.settlement_date.strftime("%d/%m/%Y")
-
         values = [
             idx,
             v.voucher_no,
@@ -85,11 +106,11 @@ def build_voucher_register_excel(db: Session) -> bytes:
             _note_text(v),
             deposited,
             cash_collection,
-            settle_date,
+            v.settlement_date,
             v.file_number or "",
         ]
         for col, value in enumerate(values, start=1):
-            cell = ws.cell(row=row, column=col, value=value)
+            cell = ws.cell(row=row, column=col, value=value if value is not None else "")
             cell.font = body_font
             cell.alignment = Alignment(
                 horizontal="center" if col in (1, 4, 8, 9) else "left",
@@ -97,6 +118,8 @@ def build_voucher_register_excel(db: Session) -> bytes:
             )
             if col == 4:
                 cell.number_format = "#,##0.00"
+            if col == 8 and v.settlement_date:
+                cell.number_format = "DD/MM/YYYY"
 
     widths = [8, 16, 28, 12, 28, 28, 18, 14, 16]
     for i, w in enumerate(widths, start=1):

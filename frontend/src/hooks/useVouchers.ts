@@ -14,6 +14,8 @@ export interface VoucherFilters {
   year?: number;
   status?: VoucherStatus | "" | string;
   search?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export function useVouchers(filters: VoucherFilters = {}) {
@@ -26,6 +28,8 @@ export function useVouchers(filters: VoucherFilters = {}) {
           year: filters.year || undefined,
           status: filters.status || undefined,
           search: filters.search || undefined,
+          date_from: filters.dateFrom || undefined,
+          date_to: filters.dateTo || undefined,
         },
       });
       return data;
@@ -94,10 +98,16 @@ export function useDeleteVoucher() {
   });
 }
 
-export async function downloadVoucherExcel() {
+export async function downloadVoucherExcel(filters: VoucherFilters = {}) {
   const token = localStorage.getItem("pc_token");
   const base = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  const res = await fetch(`${base}/api/vouchers/export/excel`, {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.search) params.set("search", filters.search);
+  if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters.dateTo) params.set("date_to", filters.dateTo);
+  const qs = params.toString();
+  const res = await fetch(`${base}/api/vouchers/export/excel${qs ? `?${qs}` : ""}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
