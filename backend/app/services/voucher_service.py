@@ -228,6 +228,12 @@ def update_voucher(db: Session, voucher_id, payload: VoucherUpdate) -> Voucher:
     if "file_number" in data:
         voucher.file_number = data["file_number"]
 
+    if "total_amount" in data and data["total_amount"] is not None:
+        amount = data["total_amount"]
+        if amount <= 0:
+            raise ValueError("Amount must be greater than zero")
+        voucher.total_amount = amount
+
     if "status" in data and data["status"]:
         new_status = VoucherStatus(data["status"])
         if new_status == VoucherStatus.PENDING_PAYMENT and voucher.status == VoucherStatus.PAID:
@@ -238,6 +244,10 @@ def update_voucher(db: Session, voucher_id, payload: VoucherUpdate) -> Voucher:
         voucher.settlement_type = None
         voucher.bank_name = None
         voucher.settlement_date = None
+        # Cleared settlement → Unpaid
+        if voucher.status == VoucherStatus.PAID:
+            _refund_last_distribution(db, voucher.id)
+        voucher.status = VoucherStatus.PENDING_PAYMENT
     else:
         if "settlement_type" in data:
             st = data["settlement_type"]
@@ -246,6 +256,10 @@ def update_voucher(db: Session, voucher_id, payload: VoucherUpdate) -> Voucher:
                 voucher.bank_name = None
             elif st is None:
                 voucher.bank_name = None
+            # Cash / Deposited → Paid automatically
+            if st in (SettlementType.CASH_COLLECTION, SettlementType.DEPOSITED):
+                if voucher.status != VoucherStatus.PAID:
+                    voucher.status = VoucherStatus.PAID
         if "bank_name" in data and voucher.settlement_type == SettlementType.DEPOSITED:
             voucher.bank_name = data["bank_name"]
         if "settlement_date" in data:

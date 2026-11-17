@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.db.models.voucher import SettlementType, VoucherStatus
-from app.utils.banks import UAE_BANKS
+from app.utils.banks import UAE_BANKS, normalize_bank_name
 from app.utils.money import to_decimal
 
 FILE_NUMBER_RE = re.compile(r"^[0-9/\-]*$")
@@ -51,11 +51,24 @@ class VoucherUpdate(BaseModel):
     clear_settlement: bool = False
     status: Literal["PAID", "PENDING_PAYMENT"] | None = None
     file_number: str | None = None
+    total_amount: Decimal | None = None
 
     @field_validator("file_number", mode="before")
     @classmethod
     def coerce_file_number(cls, v):
         return _validate_file_number(v)
+
+    @field_validator("total_amount", mode="before")
+    @classmethod
+    def coerce_total_amount(cls, v):
+        if v is None or v == "":
+            return None
+        return to_decimal(v)
+
+    @field_validator("bank_name", mode="before")
+    @classmethod
+    def coerce_bank_name(cls, v):
+        return normalize_bank_name(v)
 
     @model_validator(mode="after")
     def validate_settlement(self):

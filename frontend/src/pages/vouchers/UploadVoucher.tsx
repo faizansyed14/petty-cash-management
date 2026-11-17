@@ -221,6 +221,23 @@ export function UploadVoucher() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          Upload PDFs/images — Clear all empties the queue so you can upload again.
+        </p>
+        {queue.length > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={clearAll}
+            disabled={savingAll || extract.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear all
+          </Button>
+        ) : null}
+      </div>
+
       <VoucherUploadDropzone
         onFiles={enqueue}
         disabled={extract.isPending || savingAll}
@@ -244,7 +261,7 @@ export function UploadVoucher() {
                 disabled={savingAll || extract.isPending}
               >
                 <Trash2 className="h-4 w-4" />
-                Clear
+                Clear all
               </Button>
               <Button
                 type="button"

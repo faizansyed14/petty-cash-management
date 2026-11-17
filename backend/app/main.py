@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
             ensure_distribution_line_voucher_not_unique,
             ensure_voucher_settlement_columns,
             flatten_vouchers_drop_line_items,
+            normalize_bank_names,
         )
 
         ensure_voucher_settlement_columns(engine)
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
         ensure_distribution_line_reversal_columns(engine)
         drop_cash_counts(engine)
         flatten_vouchers_drop_line_items(engine)
+        normalize_bank_names(engine)
         if settings.seed_on_startup:
             from app.db.seed import run_seed
 

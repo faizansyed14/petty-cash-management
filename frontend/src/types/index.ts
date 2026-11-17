@@ -12,29 +12,56 @@ export type SettlementType = "DEPOSITED" | "CASH_COLLECTION";
 export type SortOrder = "ascending" | "descending" | "voucher_order";
 
 export const UAE_BANKS = [
-  "Abu Dhabi Commercial Bank (ADCB)",
-  "Abu Dhabi Islamic Bank (ADIB)",
-  "Ajman Bank",
-  "Al Ansari Exchange",
-  "Al Fardan Exchange",
-  "Al Hilal Bank",
-  "Al Jazira Exchange",
+  "ADCB",
+  "ADIB",
+  "Ajman",
+  "Al Ansari",
+  "Al Fardan",
+  "Al Hilal",
+  "Al Jazira",
   "Bank of Sharjah",
-  "Commercial Bank of Dubai (CBD)",
+  "CBD",
   "Dubai Bank",
-  "Dubai Islamic Bank (DIB)",
+  "DIB",
   "Emirates Islamic",
-  "Emirates NBD",
-  "First Abu Dhabi Bank (FAB)",
-  "HSBC UAE",
-  "Lulu Exchange",
-  "Mashreq Bank",
-  "National Bank of Fujairah",
+  "ENBD",
+  "FAB",
+  "HSBC",
+  "Lulu",
+  "Mashreq",
+  "NBF",
   "RAKBANK",
-  "Sharjah Islamic Bank",
-  "Standard Chartered UAE",
-  "United Arab Bank",
+  "SIB",
+  "SC",
+  "UAB",
 ] as const;
+
+const BANK_ALIASES: Record<string, string> = {
+  "Abu Dhabi Commercial Bank (ADCB)": "ADCB",
+  "Abu Dhabi Islamic Bank (ADIB)": "ADIB",
+  "Ajman Bank": "Ajman",
+  "Al Ansari Exchange": "Al Ansari",
+  "Al Fardan Exchange": "Al Fardan",
+  "Al Hilal Bank": "Al Hilal",
+  "Al Jazira Exchange": "Al Jazira",
+  "Commercial Bank of Dubai (CBD)": "CBD",
+  "Dubai Islamic Bank (DIB)": "DIB",
+  "Emirates NBD": "ENBD",
+  "First Abu Dhabi Bank (FAB)": "FAB",
+  "HSBC UAE": "HSBC",
+  "Lulu Exchange": "Lulu",
+  "Mashreq Bank": "Mashreq",
+  "National Bank of Fujairah": "NBF",
+  "Sharjah Islamic Bank": "SIB",
+  "Standard Chartered UAE": "SC",
+  "United Arab Bank": "UAB",
+};
+
+export function normalizeBankName(name: string | null | undefined): string {
+  if (!name) return UAE_BANKS[0];
+  if ((UAE_BANKS as readonly string[]).includes(name)) return name;
+  return BANK_ALIASES[name] || name;
+}
 
 export const NOTE_DENOMS = ["1000", "500", "200", "100", "50", "20", "10", "5"] as const;
 export const COIN_DENOMS = ["1", "0.5", "0.25"] as const;
@@ -89,6 +116,7 @@ export interface VoucherUpdate {
   clear_settlement?: boolean;
   status?: "PAID" | "PENDING_PAYMENT";
   file_number?: string | null;
+  total_amount?: number | string;
 }
 
 export interface VoucherDraft {

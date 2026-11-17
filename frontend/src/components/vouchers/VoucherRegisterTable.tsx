@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import {
 import { useDeleteVoucher, useUpdateVoucher } from "@/hooks/useVouchers";
 import { formatMoney, parseDisplayDate, toDisplayDate } from "@/lib/utils";
 import { getErrorMessage } from "@/services/api";
-import { UAE_BANKS, type SettlementType, type Voucher } from "@/types";
+import { UAE_BANKS, normalizeBankName, type SettlementType, type Voucher } from "@/types";
 
 interface Props {
   vouchers: Voucher[];
@@ -43,6 +43,10 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
   const del = useDeleteVoucher();
   const [pendingDelete, setPendingDelete] = useState<Voucher | null>(null);
   const [dateOrder, setDateOrder] = useState<"desc" | "asc">("asc");
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollWidth, setScrollWidth] = useState(0);
+  const syncing = useRef(false);
 
   const sorted = useMemo(() => {
     const rows = [...vouchers];
@@ -56,6 +60,38 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
     });
     return rows;
   }, [vouchers, dateOrder]);
+
+  useEffect(() => {
+    const body = bodyScrollRef.current;
+    if (!body) return;
+
+    const measure = () => {
+      const inner = body.firstElementChild as HTMLElement | null;
+      setScrollWidth(inner?.scrollWidth || body.scrollWidth);
+    };
+    measure();
+
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    if (ro && body.firstElementChild) ro.observe(body.firstElementChild);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [sorted, loading]);
+
+  const syncScroll = (source: "top" | "body") => {
+    if (syncing.current) return;
+    const top = topScrollRef.current;
+    const body = bodyScrollRef.current;
+    if (!top || !body) return;
+    syncing.current = true;
+    if (source === "top") body.scrollLeft = top.scrollLeft;
+    else top.scrollLeft = body.scrollLeft;
+    requestAnimationFrame(() => {
+      syncing.current = false;
+    });
+  };
 
   const save = async (id: string, payload: Parameters<typeof update.mutateAsync>[0]["payload"]) => {
     try {
@@ -86,207 +122,254 @@ export function VoucherRegisterTable({ vouchers, loading }: Props) {
 
   return (
     <>
-      <div className="overflow-x-auto">
-        <div className="border-b border-dashed border-slate-300 bg-white px-4 py-3 text-center">
-          <h3 className="text-lg font-bold tracking-wide text-green-700">ALPHA DATA RECRUITMENT</h3>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="border-dashed">
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">S.No:</TableHead>
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">Voucher No:</TableHead>
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">Name</TableHead>
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">Amount</TableHead>
-              <TableHead className="h-9 min-w-[180px] px-3 py-2 font-bold uppercase">Notes</TableHead>
-              <TableHead className="h-9 min-w-[320px] px-3 py-2 font-bold uppercase">Deposited</TableHead>
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">Cash Collection</TableHead>
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 uppercase"
-                  onClick={() => setDateOrder((o) => (o === "desc" ? "asc" : "desc"))}
-                  title={dateOrder === "asc" ? "Oldest first — click for latest" : "Latest first — click for oldest"}
-                >
-                  Date {dateOrder === "desc" ? "↓" : "↑"}
-                </button>
-              </TableHead>
-              <TableHead className="h-9 min-w-[120px] px-3 py-2 font-bold uppercase">File Number</TableHead>
-              <TableHead className="h-9 px-3 py-2 font-bold uppercase">Status</TableHead>
-              <TableHead className="h-9 px-3 py-2 text-right font-bold uppercase">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sorted.map((v, idx) => {
-              const settlementValue =
-                v.settlement_type === "DEPOSITED"
-                  ? "DEPOSITED"
-                  : v.settlement_type === "CASH_COLLECTION"
-                    ? "CASH_COLLECTION"
-                    : "NONE";
+      <div
+        ref={topScrollRef}
+        className="sticky top-16 z-20 overflow-x-auto border-b border-slate-200 bg-white shadow-sm"
+        onScroll={() => syncScroll("top")}
+        aria-hidden
+      >
+        <div style={{ width: scrollWidth || "100%", height: 12 }} />
+      </div>
 
-              const noteText = v.details || "—";
+      <div
+        ref={bodyScrollRef}
+        className="overflow-x-auto"
+        onScroll={() => syncScroll("body")}
+      >
+        <div className="min-w-max">
+          <div className="border-b border-dashed border-slate-300 bg-white px-4 py-3 text-center">
+            <h3 className="text-lg font-bold tracking-wide text-green-700">ALPHA DATA RECRUITMENT</h3>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-dashed">
+                <TableHead className="h-9 px-3 py-2 font-bold uppercase">S.No:</TableHead>
+                <TableHead className="h-9 px-3 py-2 font-bold uppercase">Voucher No:</TableHead>
+                <TableHead className="h-9 px-3 py-2 font-bold uppercase">Name</TableHead>
+                <TableHead className="h-9 px-3 py-2 font-bold uppercase">Amount</TableHead>
+                <TableHead className="h-9 min-w-[180px] px-3 py-2 font-bold uppercase">Notes</TableHead>
+                <TableHead className="h-9 min-w-[280px] px-3 py-2 font-bold uppercase">Deposited</TableHead>
+                <TableHead className="h-9 px-3 py-2 font-bold uppercase">Cash Collection</TableHead>
+                <TableHead className="h-9 px-3 py-2 font-bold uppercase">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 uppercase"
+                    onClick={() => setDateOrder((o) => (o === "desc" ? "asc" : "desc"))}
+                    title={dateOrder === "asc" ? "Oldest first — click for latest" : "Latest first — click for oldest"}
+                  >
+                    Date {dateOrder === "desc" ? "↓" : "↑"}
+                  </button>
+                </TableHead>
+                <TableHead className="h-9 min-w-[120px] px-3 py-2 font-bold uppercase">File Number</TableHead>
+                <TableHead className="h-9 px-3 py-2 font-bold uppercase">Status</TableHead>
+                <TableHead className="h-9 px-3 py-2 text-right font-bold uppercase">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((v, idx) => {
+                const settlementValue =
+                  v.settlement_type === "DEPOSITED"
+                    ? "DEPOSITED"
+                    : v.settlement_type === "CASH_COLLECTION"
+                      ? "CASH_COLLECTION"
+                      : "NONE";
 
-              return (
-                <TableRow key={v.id} className="whitespace-nowrap">
-                  <TableCell className="px-3 py-1.5 text-center">{idx + 1}</TableCell>
-                  <TableCell className="px-3 py-1.5 font-medium">{v.voucher_no}</TableCell>
-                  <TableCell className="px-3 py-1.5">{v.employee.name}</TableCell>
-                  <TableCell className="px-3 py-1.5 font-medium">
-                    {formatMoney(v.total_amount, v.currency)}
-                  </TableCell>
-                  <TableCell className="max-w-[240px] px-3 py-1.5">
-                    <span className="block truncate text-sm" title={noteText}>
-                      {noteText}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-3 py-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <Select
-                        value={settlementValue}
-                        onValueChange={(val) => {
-                          if (val === "NONE") {
-                            void save(v.id, { clear_settlement: true });
+                const noteText = v.details || "—";
+                const bank = normalizeBankName(v.bank_name);
+                const amountStr =
+                  typeof v.total_amount === "number"
+                    ? v.total_amount.toFixed(2)
+                    : String(v.total_amount);
+
+                return (
+                  <TableRow key={v.id} className="whitespace-nowrap">
+                    <TableCell className="px-3 py-1.5 text-center">{idx + 1}</TableCell>
+                    <TableCell className="px-3 py-1.5 font-medium">{v.voucher_no}</TableCell>
+                    <TableCell className="px-3 py-1.5">{v.employee.name}</TableCell>
+                    <TableCell className="px-3 py-1.5">
+                      <Input
+                        className="h-8 w-[110px] font-medium"
+                        inputMode="decimal"
+                        defaultValue={amountStr}
+                        key={`${v.id}-amt-${amountStr}`}
+                        title={formatMoney(v.total_amount, v.currency)}
+                        onBlur={(e) => {
+                          const raw = e.target.value.replace(/,/g, "").trim();
+                          const next = Number(raw);
+                          if (!raw || Number.isNaN(next) || next <= 0) {
+                            toast.error("Enter a valid amount > 0");
+                            e.target.value = amountStr;
                             return;
                           }
-                          if (val === "CASH_COLLECTION") {
-                            void save(v.id, {
-                              settlement_type: "CASH_COLLECTION",
-                              bank_name: null,
-                              settlement_date: v.settlement_date || new Date().toISOString().slice(0, 10),
-                            });
-                            return;
+                          const current = Number(v.total_amount);
+                          if (Math.abs(next - current) > 0.0001) {
+                            void save(v.id, { total_amount: next.toFixed(2) });
+                          } else {
+                            e.target.value = amountStr;
                           }
-                          void save(v.id, {
-                            settlement_type: "DEPOSITED" as SettlementType,
-                            bank_name: v.bank_name || UAE_BANKS[0],
-                            settlement_date: v.settlement_date || new Date().toISOString().slice(0, 10),
-                          });
                         }}
-                      >
-                        <SelectTrigger className="h-8 w-[150px] shrink-0">
-                          <SelectValue placeholder="Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NONE">—</SelectItem>
-                          <SelectItem value="DEPOSITED">Deposited</SelectItem>
-                          <SelectItem value="CASH_COLLECTION">Cash collection</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {v.settlement_type === "DEPOSITED" ? (
+                      />
+                    </TableCell>
+                    <TableCell className="max-w-[240px] px-3 py-1.5">
+                      <span className="block truncate text-sm" title={noteText}>
+                        {noteText}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-3 py-1.5">
+                      <div className="flex items-center gap-1.5">
                         <Select
-                          value={v.bank_name || UAE_BANKS[0]}
-                          onValueChange={(bank) =>
+                          value={settlementValue}
+                          onValueChange={(val) => {
+                            if (val === "NONE") {
+                              void save(v.id, {
+                                clear_settlement: true,
+                                status: "PENDING_PAYMENT",
+                              });
+                              return;
+                            }
+                            if (val === "CASH_COLLECTION") {
+                              void save(v.id, {
+                                settlement_type: "CASH_COLLECTION",
+                                bank_name: null,
+                                settlement_date: v.settlement_date || new Date().toISOString().slice(0, 10),
+                                status: "PAID",
+                              });
+                              return;
+                            }
                             void save(v.id, {
-                              settlement_type: "DEPOSITED",
+                              settlement_type: "DEPOSITED" as SettlementType,
                               bank_name: bank,
                               settlement_date: v.settlement_date || new Date().toISOString().slice(0, 10),
-                            })
-                          }
+                              status: "PAID",
+                            });
+                          }}
                         >
-                          <SelectTrigger className="h-8 w-[170px] shrink-0">
-                            <SelectValue placeholder="UAE bank" />
+                          <SelectTrigger className="h-8 w-[150px] shrink-0">
+                            <SelectValue placeholder="Type" />
                           </SelectTrigger>
                           <SelectContent>
-                            {UAE_BANKS.map((b) => (
-                              <SelectItem key={b} value={b}>
-                                {b}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="NONE">—</SelectItem>
+                            <SelectItem value="DEPOSITED">Deposited</SelectItem>
+                            <SelectItem value="CASH_COLLECTION">Cash collection</SelectItem>
                           </SelectContent>
                         </Select>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-3 py-1.5">
-                    {v.settlement_type === "CASH_COLLECTION" ? (
-                      <span className="text-sm font-medium">Cash Collection</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="px-3 py-1.5">
-                    <Input
-                      className="h-8 w-[120px]"
-                      placeholder="dd/mm/yyyy"
-                      disabled={!v.settlement_type}
-                      defaultValue={toDisplayDate(v.settlement_date)}
-                      key={`${v.id}-date-${v.settlement_date ?? ""}`}
-                      onBlur={(e) => {
-                        if (!v.settlement_type) return;
-                        const parsed = parseDisplayDate(e.target.value);
-                        if (parsed === undefined) {
-                          toast.error("Use date as dd/mm/yyyy");
-                          e.target.value = toDisplayDate(v.settlement_date);
-                          return;
-                        }
-                        const current = v.settlement_date ? v.settlement_date.slice(0, 10) : null;
-                        if (parsed !== current) {
-                          void save(v.id, {
-                            settlement_type: v.settlement_type,
-                            bank_name: v.bank_name,
-                            settlement_date: parsed,
-                          });
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell className="px-3 py-1.5">
-                    <Input
-                      className="h-8 w-[130px]"
-                      inputMode="text"
-                      placeholder="e.g. 12/34-5"
-                      defaultValue={v.file_number ?? ""}
-                      key={`${v.id}-file-${v.file_number ?? ""}`}
-                      onChange={(e) => {
-                        const cleaned = e.target.value.replace(/[^0-9/\-]/g, "");
-                        if (cleaned !== e.target.value) e.target.value = cleaned;
-                      }}
-                      onBlur={(e) => {
-                        const next = e.target.value.trim() || null;
-                        if (next !== (v.file_number ?? null)) {
-                          void save(v.id, { file_number: next });
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell className="px-3 py-1.5">
-                    <Select
-                      value={v.status === "PAID" ? "PAID" : "PENDING_PAYMENT"}
-                      onValueChange={(val) => void save(v.id, { status: val as "PAID" | "PENDING_PAYMENT" })}
-                    >
-                      <SelectTrigger
-                        className={cn(
-                          "h-8 w-[110px] font-medium",
-                          v.status === "PAID"
-                            ? "border-emerald-300 text-emerald-700"
-                            : "border-amber-300 text-amber-700",
-                        )}
+                        {v.settlement_type === "DEPOSITED" ? (
+                          <Select
+                            value={bank}
+                            onValueChange={(nextBank) =>
+                              void save(v.id, {
+                                settlement_type: "DEPOSITED",
+                                bank_name: nextBank,
+                                settlement_date: v.settlement_date || new Date().toISOString().slice(0, 10),
+                                status: "PAID",
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[120px] shrink-0">
+                              <SelectValue placeholder="Bank" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {UAE_BANKS.map((b) => (
+                                <SelectItem key={b} value={b}>
+                                  {b}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-3 py-1.5">
+                      {v.settlement_type === "CASH_COLLECTION" ? (
+                        <span className="text-sm font-medium">Cash Collection</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-3 py-1.5">
+                      <Input
+                        className="h-8 w-[120px]"
+                        placeholder="dd/mm/yyyy"
+                        disabled={!v.settlement_type}
+                        defaultValue={toDisplayDate(v.settlement_date)}
+                        key={`${v.id}-date-${v.settlement_date ?? ""}`}
+                        onBlur={(e) => {
+                          if (!v.settlement_type) return;
+                          const parsed = parseDisplayDate(e.target.value);
+                          if (parsed === undefined) {
+                            toast.error("Use date as dd/mm/yyyy");
+                            e.target.value = toDisplayDate(v.settlement_date);
+                            return;
+                          }
+                          const current = v.settlement_date ? v.settlement_date.slice(0, 10) : null;
+                          if (parsed !== current) {
+                            void save(v.id, {
+                              settlement_type: v.settlement_type,
+                              bank_name: v.bank_name,
+                              settlement_date: parsed,
+                            });
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="px-3 py-1.5">
+                      <Input
+                        className="h-8 w-[130px]"
+                        inputMode="text"
+                        placeholder="e.g. 12/34-5"
+                        defaultValue={v.file_number ?? ""}
+                        key={`${v.id}-file-${v.file_number ?? ""}`}
+                        onChange={(e) => {
+                          const cleaned = e.target.value.replace(/[^0-9/\-]/g, "");
+                          if (cleaned !== e.target.value) e.target.value = cleaned;
+                        }}
+                        onBlur={(e) => {
+                          const next = e.target.value.trim() || null;
+                          if (next !== (v.file_number ?? null)) {
+                            void save(v.id, { file_number: next });
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className="px-3 py-1.5">
+                      <Select
+                        value={v.status === "PAID" ? "PAID" : "PENDING_PAYMENT"}
+                        onValueChange={(val) => void save(v.id, { status: val as "PAID" | "PENDING_PAYMENT" })}
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PENDING_PAYMENT">Unpaid</SelectItem>
-                        <SelectItem value="PAID">Paid</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="px-3 py-1.5 text-right">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      title="Delete voucher"
-                      className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setPendingDelete(v)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                        <SelectTrigger
+                          className={cn(
+                            "h-8 w-[110px] font-medium",
+                            v.status === "PAID"
+                              ? "border-emerald-300 text-emerald-700"
+                              : "border-amber-300 text-amber-700",
+                          )}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PENDING_PAYMENT">Unpaid</SelectItem>
+                          <SelectItem value="PAID">Paid</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="px-3 py-1.5 text-right">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        title="Delete voucher"
+                        className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setPendingDelete(v)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <Dialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>

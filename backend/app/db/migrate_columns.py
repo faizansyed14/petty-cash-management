@@ -185,6 +185,24 @@ def ensure_distribution_line_reversal_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE distribution_lines ADD COLUMN reversed_at DATETIME"))
 
 
+def normalize_bank_names(engine: Engine) -> None:
+    """Shorten legacy bank labels stored on vouchers."""
+    from app.utils.banks import BANK_NAME_ALIASES
+
+    insp = inspect(engine)
+    if "vouchers" not in insp.get_table_names():
+        return
+    cols = {c["name"] for c in insp.get_columns("vouchers")}
+    if "bank_name" not in cols:
+        return
+    with engine.begin() as conn:
+        for old, new in BANK_NAME_ALIASES.items():
+            conn.execute(
+                text("UPDATE vouchers SET bank_name = :new WHERE bank_name = :old"),
+                {"old": old, "new": new},
+            )
+
+
 def drop_cash_counts(engine: Engine) -> None:
     """Remove unused cash_counts table and distributions.cash_count_id FK."""
     insp = inspect(engine)
